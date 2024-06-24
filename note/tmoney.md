@@ -362,3 +362,512 @@ Les utilisateurs de cette API sont :
  Les partenaires qui s'intègrent à l'API
 Les objectifs de cette API sont :
  API standard pour l'intégration basée sur JSON
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# credit api tmoney:
+
+Pour implémenter l'intégration de l'API TMoney en utilisant Prisma avec MongoDB et TypeScript, nous allons suivre une approche dynamique en utilisant les informations fournies dans le document. Voici comment vous pouvez organiser votre projet avec des fichiers bien définis et une logique dynamique :
+
+### Structure du Projet
+
+Voici comment vous pouvez structurer votre projet pour cette intégration :
+
+```
+project-root/
+│
+├── src/
+│   ├── db/
+│   │   └── prisma.ts            // Configuration de Prisma et client Prisma
+│   │
+│   ├── models/
+│   │   └── TMoneyTransaction.ts // Modèle Prisma pour les transactions TMoney
+│   │
+│   ├── services/
+│   │   └── tmoneyService.ts     // Service pour appeler l'API TMoney et gérer les transactions
+│   │
+│   ├── utils/
+│   │   └── constants.ts         // Constantes et configuration globale
+│   │
+│   ├── index.ts                 // Point d'entrée de l'application
+│   └── ...
+│
+├── prisma/
+│   └── schema.prisma            // Définition des modèles Prisma
+│
+├── .env                         // Fichier de configuration des variables d'environnement
+├── package.json
+└── ...
+```
+
+### Étapes d'Implémentation
+
+#### 1. Configuration de Prisma
+
+**`src/db/prisma.ts` :**
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+export default prisma;
+```
+
+Assurez-vous d'initialiser et de configurer Prisma comme indiqué précédemment avec MongoDB.
+
+#### 2. Définition des Modèles Prisma
+
+**`prisma/schema.prisma` :**
+
+Définissez votre modèle pour les transactions TMoney dans Prisma. Voici un exemple basé sur les informations fournies :
+
+```prisma
+// prisma/schema.prisma
+model TMoneyTransaction {
+  id            String    @id @default(auto()) @map("_id")
+  refTmoney     Int
+  montant       Int
+  numeroClient  String
+  statutRequete String
+  dateHeureTmoney DateTime
+  idRequete     String
+  refCommande   String
+  typeRequete   String
+  code          String
+  message       String
+  idPartenaire  String
+  nomPartenaire String
+}
+```
+
+Après avoir défini ce modèle, générez le client Prisma avec `npx prisma generate`.
+
+#### 3. Service TMoney
+
+**`src/services/tmoneyService.ts` :**
+
+Implémentez le service qui va interagir avec l'API TMoney pour effectuer des opérations de crédit, débit, etc.
+
+```typescript
+import axios from 'axios';
+import prisma from '../db/prisma';
+import { TMoneyTransaction } from '@prisma/client';
+import { TMoneyApiResponse } from '../models/TMoneyApiResponse';
+
+const TMONEY_API_URL = process.env.TMONEY_API_URL || '';
+const TMONEY_API_KEY = process.env.TMONEY_API_KEY || '';
+
+interface CreditRequest {
+  idRequete: string;
+  numeroClient: string;
+  montant: number;
+  refCommande: string;
+  dateHeureRequete: string;
+  description: string;
+}
+
+async function creditTMoney(creditRequest: CreditRequest): Promise<TMoneyTransaction & TMoneyApiResponse> {
+  try {
+    const response = await axios.post<TMoneyApiResponse>(TMONEY_API_URL, creditRequest, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${TMONEY_API_KEY}`
+      }
+    });
+
+    const newTransaction = await prisma.tMoneyTransaction.create({
+      data: {
+        refTmoney: response.data.refTmoney,
+        montant: response.data.montant,
+        numeroClient: response.data.numeroClient,
+        statutRequete: response.data.statutRequete,
+        dateHeureTmoney: new Date(),
+        idRequete: response.data.idRequete,
+        refCommande: response.data.refCommande,
+        typeRequete: response.data.typeRequete,
+        code: response.data.code,
+        message: response.data.message,
+        idPartenaire: response.data.idPartenaire,
+        nomPartenaire: response.data.nomPartenaire,
+      },
+    });
+
+    return newTransaction;
+  } catch (error) {
+    throw new Error(`Error calling TMoney API: ${error.message}`);
+  }
+}
+
+export { creditTMoney };
+```
+
+#### 4. Configuration des Variables d'Environnement
+
+**`.env` :**
+
+Configurez vos variables d'environnement pour l'URL de l'API TMoney et votre clé API TMoney.
+
+```dotenv
+TMONEY_API_URL=https://ms-tpc-prep.togocom.tg/api/tpcredit
+TMONEY_API_KEY=your_tmoney_api_key_here
+```
+
+#### 5. Utilisation dans votre Application
+
+**`src/index.ts` :**
+
+Utilisez le service TMoney dans votre application principale.
+
+```typescript
+import { creditTMoney } from './services/tmoneyService';
+
+async function main() {
+  const creditRequest = {
+    idRequete: 'credit_request_biller_5',
+    numeroClient: '22890990990',
+    montant: 300,
+    refCommande: 'credit_cmd_biller_05',
+    dateHeureRequete: '2021-03-30 17:09:03',
+    description: 'Paying command 05'
+  };
+
+  try {
+    const result = await creditTMoney(creditRequest);
+    console.log('TMoney API Response:', result);
+  } catch (error) {
+    console.error('Error calling TMoney API:', error.message);
+  }
+}
+
+main();
+```
+
+### Points Importants
+
+- **Organisation du Code :** Divisez votre code en services, modèles et utilitaires pour une meilleure lisibilité et maintenabilité.
+- **Utilisation de Variables d'Environnement :** Protégez vos clés d'API et autres informations sensibles en les chargeant depuis des variables d'environnement.
+- **Gestion des Erreurs :** Capturez et gérez les erreurs appropriées lors des appels à l'API TMoney et lors de l'enregistrement des transactions dans la base de données.
+
+Cette approche structurée vous permettra de mettre en œuvre l'intégration de l'API TMoney de manière robuste et flexible, en utilisant Prisma avec MongoDB pour la persistance des données et TypeScript pour une meilleure sécurité et maintenabilité du code. Assurez-vous d'adapter ces exemples en fonction des spécificités de votre application et des besoins exacts de l'API TMoney.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Je comprends votre question maintenant. Pour une application complète utilisant Node.js avec TypeScript, Prisma et MongoDB, il est courant d'organiser le code en utilisant des routes, des contrôleurs, des services, et des modèles (ou des entités dans le cas de Prisma).
+
+Voici comment vous pouvez structurer votre application de manière plus complète, en incluant les routes et les contrôleurs :
+
+### Structure du Projet
+
+```
+project-root/
+│
+├── src/
+│   ├── config/
+│   │   └── prisma.ts            // Configuration de Prisma et client Prisma
+│   │
+│   ├── controllers/
+│   │   └── tmoneyController.ts  // Contrôleurs pour les routes TMoney
+│   │
+│   ├── models/
+│   │   └── TMoneyTransaction.ts // Modèle Prisma pour les transactions TMoney
+│   │
+│   ├── routes/
+│   │   └── tmoneyRoutes.ts      // Définition des routes TMoney
+│   │
+│   ├── services/
+│   │   └── tmoneyService.ts     // Services pour appeler l'API TMoney et gérer les transactions
+│   │
+│   ├── index.ts                 // Point d'entrée de l'application
+│   └── ...
+│
+├── prisma/
+│   └── schema.prisma            // Définition des modèles Prisma
+│
+├── .env                         // Fichier de configuration des variables d'environnement
+├── package.json
+└── ...
+```
+
+### Détail des Nouveaux Éléments
+
+#### 1. Contrôleurs
+
+**`src/controllers/tmoneyController.ts` :**
+
+Les contrôleurs contiendront la logique pour manipuler les requêtes HTTP entrantes, appeler les services nécessaires et renvoyer les réponses HTTP appropriées.
+
+```typescript
+// src/controllers/tmoneyController.ts
+
+import { Request, Response } from 'express';
+import { creditTMoney } from '../services/tmoneyService';
+
+async function creditTMoneyController(req: Request, res: Response) {
+  const { idRequete, numeroClient, montant, refCommande, dateHeureRequete, description } = req.body;
+
+  try {
+    const result = await creditTMoney({ idRequete, numeroClient, montant, refCommande, dateHeureRequete, description });
+    return res.status(200).json(result);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+export { creditTMoneyController };
+```
+
+#### 2. Routes
+
+**`src/routes/tmoneyRoutes.ts` :**
+
+Les routes définissent les endpoints de votre application et dirigent les requêtes HTTP vers les contrôleurs appropriés.
+
+```typescript
+// src/routes/tmoneyRoutes.ts
+
+import express from 'express';
+import { creditTMoneyController } from '../controllers/tmoneyController';
+
+const router = express.Router();
+
+router.post('/credit', creditTMoneyController);
+
+export default router;
+```
+
+#### 3. Point d'Entrée de l'Application
+
+**`src/index.ts` :**
+
+C'est le point d'entrée de votre application où vous configurez Express, définissez les middlewares, et montez les routes.
+
+```typescript
+// src/index.ts
+
+import express from 'express';
+import dotenv from 'dotenv';
+import tmoneyRoutes from './routes/tmoneyRoutes';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware pour parser le corps des requêtes en JSON
+app.use(express.json());
+
+// Montage des routes TMoney
+app.use('/api/tmoney', tmoneyRoutes);
+
+// Démarrage du serveur
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
+```
+
+### Utilisation des Contrôleurs et des Routes
+
+- **Contrôleurs :** Ils contiennent la logique métier et appellent les services nécessaires pour traiter les requêtes et préparer les réponses.
+- **Routes :** Elles définissent les endpoints de votre API et dirigent les requêtes HTTP vers les contrôleurs appropriés.
+- **Services :** Ils encapsulent la logique pour interagir avec l'API TMoney, traiter les données, et communiquer avec la base de données via Prisma.
+- **Modèles :** Définis dans Prisma, ils représentent les entités de données comme les transactions TMoney et facilitent l'interaction avec la base de données.
+
+Cette structure facilite la séparation des préoccupations (Separation of Concerns), améliore la maintenabilité de votre code et permet une gestion claire des flux de données et des opérations dans votre application backend utilisant l'API TMoney avec Prisma, MongoDB, et TypeScript. Adapté en fonction de vos besoins spécifiques et des autres fonctionnalités de l'API TMoney que vous souhaitez intégrer.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# models
+
+
+Oui, vous pouvez associer le modèle `TMoneyTransaction` au modèle `User` si vous souhaitez enregistrer les transactions TMoney en relation avec un utilisateur spécifique. Voici comment vous pourriez ajuster votre modèle `TMoneyTransaction` pour inclure une référence à l'utilisateur :
+
+### Modèle `TMoneyTransaction` avec Association à `User`
+
+Si vous souhaitez enregistrer les transactions TMoney en relation avec un utilisateur, vous pouvez ajouter une relation dans votre modèle `TMoneyTransaction` vers le modèle `User`. Voici comment cela pourrait être fait :
+
+```prisma
+// prisma/schema.prisma
+
+model TMoneyTransaction {
+  id                String    @id @default(auto()) @map("_id")
+  refTmoney         Int
+  montant           Int
+  numeroClient      String
+  statutRequete     String
+  dateHeureTmoney   DateTime
+  idRequete         String
+  refCommande       String
+  typeRequete       String
+  code              String
+  message           String
+  idPartenaire      String
+  nomPartenaire     String
+  // Relation avec l'utilisateur
+  user              User      @relation(fields: [userId], references: [id])
+  userId            String    @map("_userId")
+}
+```
+
+### Modifications et Associations
+
+1. **Ajout de la Relation :** Vous avez ajouté une relation `user` dans `TMoneyTransaction` qui pointe vers `User`. Cela vous permet de lier chaque transaction TMoney à un utilisateur spécifique.
+
+2. **Modification de `userId` :** `userId` est maintenant une clé étrangère dans `TMoneyTransaction` qui référence l'`id` de l'utilisateur dans la table `User`.
+
+### Utilisation dans votre Application
+
+Lorsque vous créez une nouvelle transaction TMoney dans votre application, vous devez vous assurer d'associer cette transaction à un utilisateur spécifique. Voici un exemple simplifié de la façon dont cela pourrait être fait dans votre service `tmoneyService.ts` :
+
+```typescript
+// src/services/tmoneyService.ts
+
+import prisma from '../config/prisma';
+import { TMoneyTransaction } from '@prisma/client';
+
+async function createTMoneyTransaction(transactionData: Partial<TMoneyTransaction>, userId: string): Promise<TMoneyTransaction> {
+  return await prisma.tMoneyTransaction.create({
+    data: {
+      ...transactionData,
+      user: { connect: { id: userId } } // Connect la transaction à l'utilisateur
+    }
+  });
+}
+
+export { createTMoneyTransaction };
+```
+
+### Conclusion
+
+En associant le modèle `TMoneyTransaction` au modèle `User`, vous pouvez garder une trace des transactions TMoney effectuées par chaque utilisateur dans votre système. Assurez-vous de mettre à jour les autres parties de votre application (contrôleurs, routes, services) pour intégrer cette nouvelle relation lorsque vous enregistrez une transaction TMoney. Cela vous permettra de suivre et de gérer facilement les transactions pour chaque utilisateur de manière organisée et relationnelle.
